@@ -686,9 +686,17 @@ build_ml2_panel_data <- function() {
   )
 }
 
-build_ml2_panel <- function(show_x_title = TRUE) {
+ml2_legend_levels <- c("Original", "Original (non-WEIRD)", "Replication", "Aggregate")
+
+build_ml2_panel <- function(show_x_title = TRUE, show_legend = FALSE) {
   ml2 <- build_ml2_panel_data()
   x_title <- if (show_x_title) "Effect size (r)" else NULL
+
+  # Add legend_group column to each data frame for unified legend
+  sites_plot <- ml2$sites |> mutate(legend_group = "Replication")
+  means_plot <- ml2$means |> mutate(legend_group = "Aggregate")
+  ori_filled_plot <- ml2$original_filled |> mutate(legend_group = "Original")
+  ori_open_plot <- ml2$original_open |> mutate(legend_group = "Original (non-WEIRD)")
 
   ggplot() +
     geom_hline(
@@ -709,38 +717,66 @@ build_ml2_panel <- function(show_x_title = TRUE) {
       linetype = "dashed"
     ) +
     geom_point(
-      data = ml2$sites,
-      aes(x = x, y = as.numeric(study_f)),
-      color = bri_color[["ml2"]],
-      fill = bri_color[["ml2"]],
+      data = sites_plot,
+      aes(x = x, y = as.numeric(study_f), color = legend_group,
+          shape = legend_group, fill = legend_group),
       size = 0.85,
       alpha = 0.38,
       position = position_jitter(width = 0, height = 0.13, seed = 42)
     ) +
     geom_point(
-      data = ml2$means,
-      aes(x = x, y = as.numeric(study_f)),
-      shape = "|",
-      color = bri_color[["dark"]],
+      data = means_plot,
+      aes(x = x, y = as.numeric(study_f), color = legend_group,
+          shape = legend_group, fill = legend_group),
       size = 3,
       stroke = 0.8
     ) +
     geom_point(
-      data = ml2$original_filled,
-      aes(x = x, y = as.numeric(study_f)),
-      shape = 16,
-      color = bri_color[["dark"]],
+      data = ori_filled_plot,
+      aes(x = x, y = as.numeric(study_f), color = legend_group,
+          shape = legend_group, fill = legend_group),
       size = 1.8,
       alpha = 0.82
     ) +
     geom_point(
-      data = ml2$original_open,
-      aes(x = x, y = as.numeric(study_f)),
-      shape = 21,
-      color = bri_color[["dark"]],
-      fill = "white",
+      data = ori_open_plot,
+      aes(x = x, y = as.numeric(study_f), color = legend_group,
+          shape = legend_group, fill = legend_group),
       size = 1.9,
       stroke = 0.65
+    ) +
+    scale_color_manual(
+      values = c(
+        "Original"            = bri_color[["dark"]],
+        "Original (non-WEIRD)" = bri_color[["dark"]],
+        "Replication"         = bri_color[["ml2"]],
+        "Aggregate"           = bri_color[["dark"]]
+      ),
+      breaks = ml2_legend_levels,
+      limits = ml2_legend_levels,
+      name = NULL
+    ) +
+    scale_shape_manual(
+      values = c(
+        "Original"            = 16,
+        "Original (non-WEIRD)" = 21,
+        "Replication"         = 16,
+        "Aggregate"           = 124
+      ),
+      breaks = ml2_legend_levels,
+      limits = ml2_legend_levels,
+      name = NULL
+    ) +
+    scale_fill_manual(
+      values = c(
+        "Original"            = bri_color[["dark"]],
+        "Original (non-WEIRD)" = "white",
+        "Replication"         = bri_color[["ml2"]],
+        "Aggregate"           = bri_color[["dark"]]
+      ),
+      breaks = ml2_legend_levels,
+      limits = ml2_legend_levels,
+      name = NULL
     ) +
     scale_y_continuous(
       breaks = seq_len(ml2$n_total),
@@ -752,9 +788,29 @@ build_ml2_panel <- function(show_x_title = TRUE) {
       sec.axis = dup_axis(name = "Effect size (Cohen's q)")
     ) +
     labs(x = x_title, y = NULL) +
+    guides(
+      color = guide_legend(
+        override.aes = list(
+          shape = c(16, 21, 16, 124),
+          fill  = c(bri_color[["dark"]], "white", bri_color[["ml2"]], bri_color[["dark"]]),
+          color = c(bri_color[["dark"]], bri_color[["dark"]], bri_color[["ml2"]], bri_color[["dark"]]),
+          size  = c(2.2, 2.2, 1.6, 3),
+          alpha = c(0.82, 0.82, 0.5, 0.95),
+          stroke = c(NA, 0.65, NA, 0.8)
+        )
+      ),
+      shape = "none",
+      fill  = "none"
+    ) +
     bri_theme +
     theme(
-      legend.position = "none",
+      legend.position = if (show_legend) "bottom" else "none",
+      legend.text = element_text(size = 7.5),
+      legend.key.width = unit(0.5, "cm"),
+      legend.key.height = unit(0.28, "cm"),
+      legend.margin = margin(t = 0, r = 0, b = 0, l = 0),
+      legend.box.margin = margin(t = 0, r = 0, b = 0, l = 0),
+      legend.spacing.x = unit(0.12, "cm"),
       panel.grid.major.x = element_line(color = bri_color[["grid_major"]], linewidth = 0.3),
       panel.grid.major.y = element_blank(),
       panel.grid.minor = element_blank(),
@@ -800,6 +856,11 @@ build_combined_by_technique_plot <- function(bri_parts, p_ml2) {
   legend_y <- 0.028
   legend_height <- 0.040
 
+  # Extract the panel B legend from a version of the ML2 plot with legend enabled
+  ml2_legend <- cowplot::get_legend(
+    build_ml2_panel(show_x_title = TRUE, show_legend = TRUE)
+  )
+
   cowplot::ggdraw() +
     cowplot::draw_plot(
       bri_parts$panel,
@@ -820,6 +881,13 @@ build_combined_by_technique_plot <- function(bri_parts, p_ml2) {
       x = bri_x,
       y = legend_y,
       width = bri_width,
+      height = legend_height
+    ) +
+    cowplot::draw_plot(
+      ml2_legend,
+      x = ml2_x,
+      y = legend_y,
+      width = ml2_width,
       height = legend_height
     ) +
     cowplot::draw_label(
